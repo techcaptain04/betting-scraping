@@ -12,6 +12,7 @@ type ScraperInterface interface {
 }
 
 type Game struct {
+	Id string `json:"id"` // not scraped
 	// a ratio of odds for either team to win
 	// based in terms of $100. if the odds are
 	// <0, it means the amount of money you
