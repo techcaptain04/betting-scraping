@@ -12,6 +12,11 @@ type Cache struct {
 	db *gorm.DB
 }
 
+type CategoryURL struct {
+	BaseURL     string
+	CategoryURL string
+}
+
 var ErrGameNotFound = errors.New("the game was not found in the database")
 
 func (c *Cache) WriteCache(game scraper.Game) error {
