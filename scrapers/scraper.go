@@ -1,5 +1,7 @@
 package scraper
 
+import "github.com/lib/pq"
+
 type Scraper struct {
 	Name    string           `json:"name"`
 	URL     string           `json:"url"`
@@ -20,7 +22,7 @@ type Game struct {
 	// you could earn per $100 bet
 	// if the team you bet on wins
 	// index 0 is the odds of 1, index 1 is the odds of team 2
-	Odds  []float64 `json:"odds"`
-	Teams []string  `json:"teams"`
-	Date  string    `json:"date"`
+	Odds  pq.Float64Array `json:"odds" gorm:"type:numeric[]"`
+	Teams pq.StringArray  `json:"teams" gorm:"type:text[]"`
+	Date  string            `json:"date"`
 }
