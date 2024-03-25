@@ -1,43 +1,55 @@
 package main
 
 import (
-	"fmt"
+	// "fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
+	// scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
+	"github.com/ferretcode-freelancing/sportsbook-scraper/cache"
 	"github.com/ferretcode-freelancing/sportsbook-scraper/scrapers/smart"
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	u := launcher.NewUserMode().
-		Leakless(false).
-		UserDataDir("tmp/t").
-		Set("disable-default-apps").
-		Set("no-first-run").
-		MustLaunch()
+	if _, err := os.Stat("./.env"); err == nil {
+		err = godotenv.Load("./.env")	
 
-	browser := rod.New().ControlURL(u).MustConnect()
-	defer browser.MustClose()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
-	newGame := make(chan scraper.Game)
+	cache, err := cache.NewCache()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// newGame := make(chan scraper.Game)
 	errChan := make(chan error)
 
-	scrapers := smart.GetScrapers(browser)
+	scrapers := smart.GetScrapers()
 
-	go scrapers.BetOnline.Scraper.GetGames(newGame, errChan)
+	urls, err := scrapers.BetOnline.Scraper.GetURLs()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = cache.StoreURLs(urls)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	go func() {
 		for {
 			select {
 			case err := <-errChan:
 				log.Fatal(err)
-			case newGame := <-newGame:
-				fmt.Println(newGame)
 			}
 		}
 	}()

@@ -1,14 +1,12 @@
 package smart
 
-import "github.com/go-rod/rod"
-
 type Scrapers struct {
 	BetOnline BetOnline
 }
 
-func GetScrapers(rod *rod.Browser) Scrapers {
+func GetScrapers() Scrapers {
 	return Scrapers{
-		BetOnline: NewBetOnline(rod),
+		BetOnline: NewBetOnline(),
 	}
 }
 
