@@ -15,6 +15,7 @@ import (
 	"github.com/go-rod/stealth"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 type BetOnline struct {
@@ -23,11 +24,24 @@ type BetOnline struct {
 }
 
 type BetOnlineScraper struct {
-	Browser *rod.Browser
-	URL     string
+	Browser    *rod.Browser
+	Categories []cache.CategoryURL
+	URL        string
 }
 
-func NewBetOnline() BetOnline {
+func RemoveDuplicate(url []cache.CategoryURL) []cache.CategoryURL {
+	allKeys := make(map[string]bool)
+	list := []cache.CategoryURL{}
+	for _, item := range url {
+		if _, value := allKeys[item.CategoryURL]; !value {
+			allKeys[item.CategoryURL] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
+func NewBetOnline(db *gorm.DB) (BetOnline, error) {
 	u := launcher.NewUserMode().
 		Leakless(false).
 		UserDataDir("tmp/t").
@@ -37,13 +51,25 @@ func NewBetOnline() BetOnline {
 
 	browser := rod.New().ControlURL(u).MustConnect()
 
+	var categories []cache.CategoryURL
+
+	err := db.
+		Model(&cache.CategoryURL{}).
+		Where("base_url = ? ", "https://betonline.ag").
+		Find(&categories).
+		Error
+
+	if err != nil {
+		return BetOnline{}, err
+	}
+
 	return BetOnline{
 		Name: "betonline",
 		Scraper: BetOnlineScraper{
 			Browser: browser,
 			URL:     "https://sports.betonline.ag/sportsbook",
 		},
-	}
+	}, nil
 }
 
 func (b *BetOnlineScraper) GetURLs() ([]cache.CategoryURL, error) {
@@ -89,13 +115,13 @@ func (b *BetOnlineScraper) GetURLs() ([]cache.CategoryURL, error) {
 			}
 
 			urls = append(urls, cache.CategoryURL{
-				BaseURL: "https://betonline.ag",
+				BaseURL:     "https://betonline.ag",
 				CategoryURL: *href,
 			})
 		}
 	}
 
-	return urls, err
+	return RemoveDuplicate(urls), err
 }
 
 func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan error) {
@@ -108,7 +134,7 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 	HandleError(err, errChan)
 
 	//TODO: change to 30 in prod
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(120 * time.Second)
 
 	gamesSelector := "div.css-1mxf4v2 > a > div.card-sections"
 	teamsSelector := "div.card-participants-section > div.card-score-participants > div.participants > div.participants-item > p"
@@ -117,40 +143,45 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 
 	for {
 		<-ticker.C
-		teams, err := page.Elements(gamesSelector + " > " + teamsSelector)
-		HandleError(err, errChan)
+		for _, category := range b.Categories {
+			err = page.Navigate(category.BaseURL + category.CategoryURL)
+			HandleError(err, errChan)
 
-		times, err := page.Elements(gamesSelector + " > " + timeSelector)
-		HandleError(err, errChan)
+			teams, err := page.Elements(gamesSelector + " > " + teamsSelector)
+			HandleError(err, errChan)
 
-		moneyLine, err := page.Elements(gamesSelector + " > " + moneyLineSelector)
-		HandleError(err, errChan)
+			times, err := page.Elements(gamesSelector + " > " + timeSelector)
+			HandleError(err, errChan)
 
-		fmt.Printf("num teams: %d\n", len(teams))
-		fmt.Printf("num times: %d\n", len(times))
-		fmt.Printf("num moneylines: %d\n", len(moneyLine))
+			moneyLine, err := page.Elements(gamesSelector + " > " + moneyLineSelector)
+			HandleError(err, errChan)
 
-		for i := range teams {
-			game := scraper.Game{}
+			fmt.Printf("num teams: %d\n", len(teams))
+			fmt.Printf("num times: %d\n", len(times))
+			fmt.Printf("num moneylines: %d\n", len(moneyLine))
 
-			if i%2 == 0 && i != len(teams)-1 {
-				team1Odds, err := strconv.ParseFloat(strings.Replace(moneyLine[i].MustText(), "+", "", -1), 64)
-				HandleError(err, errChan)
+			for i := range teams {
+				game := scraper.Game{}
 
-				team2Odds, err := strconv.ParseFloat(strings.Replace(moneyLine[i+1].MustText(), "+", "", -1), 64)
-				HandleError(err, errChan)
+				if i%2 == 0 && i != len(teams)-1 {
+					team1Odds, err := strconv.ParseFloat(strings.Replace(moneyLine[i].MustText(), "+", "", -1), 64)
+					HandleError(err, errChan)
 
-				game.Id = uuid.NewString()
-				game.Odds = pq.Float64Array{team1Odds, team2Odds}
-				game.Teams = pq.StringArray{teams[i].MustText(), teams[i+1].MustText()}
+					team2Odds, err := strconv.ParseFloat(strings.Replace(moneyLine[i+1].MustText(), "+", "", -1), 64)
+					HandleError(err, errChan)
 
-				if i >= len(times) {
-					game.Date = times[(i/2)-1].MustText()
-				} else {
-					game.Date = times[i].MustText()
+					game.Id = uuid.NewString()
+					game.Odds = pq.Float64Array{team1Odds, team2Odds}
+					game.Teams = pq.StringArray{teams[i].MustText(), teams[i+1].MustText()}
+
+					if i >= len(times) {
+						game.Date = times[(i/2)-1].MustText()
+					} else {
+						game.Date = times[i].MustText()
+					}
+
+					newGame <- game
 				}
-
-				newGame <- game
 			}
 		}
 

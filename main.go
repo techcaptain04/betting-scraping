@@ -15,7 +15,7 @@ import (
 
 func main() {
 	if _, err := os.Stat("./.env"); err == nil {
-		err = godotenv.Load("./.env")	
+		err = godotenv.Load("./.env")
 
 		if err != nil {
 			log.Fatal(err)
@@ -31,7 +31,7 @@ func main() {
 	// newGame := make(chan scraper.Game)
 	errChan := make(chan error)
 
-	scrapers := smart.GetScrapers()
+	scrapers := smart.GetScrapers(cache.DB)
 
 	urls, err := scrapers.BetOnline.Scraper.GetURLs()
 

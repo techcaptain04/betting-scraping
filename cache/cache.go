@@ -12,7 +12,7 @@ import (
 )
 
 type Cache struct {
-	db *gorm.DB
+	DB *gorm.DB
 }
 
 type CategoryURL struct {
@@ -31,7 +31,7 @@ func NewCache() (Cache, error) {
 
 	dsn = strings.ReplaceAll(dsn, "\n", "")
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	DB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 
@@ -39,7 +39,7 @@ func NewCache() (Cache, error) {
 		return Cache{}, err
 	}
 
-	sqlDB, err := db.DB()
+	sqlDB, err := DB.DB()
 
 	if err != nil {
 		return Cache{}, err
@@ -48,19 +48,19 @@ func NewCache() (Cache, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 
-	err = db.AutoMigrate(&scraper.Game{}, CategoryURL{})
+	err = DB.AutoMigrate(&scraper.Game{}, CategoryURL{})
 
 	if err != nil {
 		return Cache{}, err
 	}
 
 	return Cache{
-		db: db,
+		DB: DB,
 	}, nil
 }
 
 func (c *Cache) StoreURLs(categories []CategoryURL) error {
-	err := c.db.Create(categories).Error
+	err := c.DB.Create(categories).Error
 
 	if err != nil {
 		return err
@@ -72,7 +72,7 @@ func (c *Cache) StoreURLs(categories []CategoryURL) error {
 func (c *Cache) WriteCache(game scraper.Game) error {
 	game.Id = uuid.NewString()
 
-	err := c.db.Create(game).Error
+	err := c.DB.Create(game).Error
 
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (c *Cache) WriteCache(game scraper.Game) error {
 func (c *Cache) GetCache(date string, teams []string) (scraper.Game, error) {
 	var game scraper.Game
 
-	err := c.db.Where("teams = ? AND date = ?", teams, date).Error
+	err := c.DB.Where("teams = ? AND date = ?", teams, date).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

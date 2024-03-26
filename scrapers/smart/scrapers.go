@@ -1,12 +1,24 @@
 package smart
 
+import (
+	"log"
+
+	"gorm.io/gorm"
+)
+
 type Scrapers struct {
 	BetOnline BetOnline
 }
 
-func GetScrapers() Scrapers {
+func GetScrapers(db *gorm.DB) Scrapers {
+	betonline, err := NewBetOnline(db)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return Scrapers{
-		BetOnline: NewBetOnline(),
+		BetOnline: betonline,
 	}
 }
 
