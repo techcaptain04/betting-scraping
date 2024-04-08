@@ -33,17 +33,17 @@ func main() {
 
 	scrapers := smart.GetScrapers(cache.DB)
 
-	urls, err := scrapers.BetOnline.Scraper.GetURLs()
+	// urls, err := scrapers.BetOnline.Scraper.GetURLs()
+	scrapers.BetOnline.Scraper.GetProps()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	// err = cache.StoreURLs(urls)
 
-	err = cache.StoreURLs(urls)
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	go func() {
 		for {

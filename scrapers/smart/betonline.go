@@ -10,8 +10,10 @@ import (
 	"github.com/ferretcode-freelancing/sportsbook-scraper/cache"
 	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/defaults"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/go-rod/rod/lib/utils"
 	"github.com/go-rod/stealth"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -124,6 +126,97 @@ func (b *BetOnlineScraper) GetURLs() ([]cache.CategoryURL, error) {
 	return RemoveDuplicate(urls), err
 }
 
+func (b *BetOnlineScraper) GetProps() {
+	defaults.Show = true
+	page := rod.New().MustConnect().NoDefaultDevice().MustPage("https://sports.betonline.ag/sportsbook/props")
+	page.MustSetViewport(1920, 1080, 1, false)
+	time.Sleep(30 * time.Second)
+
+	f := page.MustElement("div.simplebar-wrapper div.simplebar-mask div.simplebar-content iframe").MustFrame()
+	if f == nil {
+		fmt.Println("iframe element not found or is nil")
+		return
+	}
+
+	p := page.Browser().MustPageFromTargetID(proto.TargetTargetID(f.FrameID))
+	fmt.Println("iframe: ", f.FrameID)
+
+	mlbButtons := p.MustElements("div.ligues-slider__list.sports div div.ligues-slider__item.sportNames")
+	fmt.Println("buttons: ", len(mlbButtons))
+	for _, mlbButton := range mlbButtons {
+		if mlbButton.MustElement("div.ligues-slider__ligue-name.cap").MustText() == "MLB" {
+			err := mlbButton.Click(proto.InputMouseButtonLeft, 1)
+			time.Sleep(10 * time.Second)
+			if err != nil {
+				fmt.Println("error: ", err)
+				return
+			}
+			break
+		}
+	}
+
+	typeButton := p.MustElement("div.main-content__wrapper div.main-markets div.main-markets__list div:nth-child(10)")
+	if typeButton == nil {
+		return
+	}
+	typeButton.Click(proto.InputMouseButtonLeft, 1)
+	time.Sleep(10 * time.Second)
+
+	// typeButtons := p.MustElements("div.main-content__wrapper div.main-markets div.main-markets__list div.main-markets__item")
+	// fmt.Println("total buttons: ", len(typeButtons))
+	// for _, button := range typeButtons {
+	// 	text := button.MustElement("p.cap").MustText()
+	// 	fmt.Println("text: ", text)
+	// 	if text == "Total Bases (from Hits)" {
+	// 		err := button.Click(proto.InputMouseButtonLeft, 1)
+	// 		if err != nil {
+	// 			fmt.Println("error: ", err)
+	// 		}
+	// 		break
+	// 	}
+	// }
+
+	ticker := time.NewTicker(5 * time.Second)
+	subTypeButtons := p.MustElements("div.main-content__wrapper div.main-stats div.main-stats__item.main-stat div.main-stat__header")
+	fmt.Println("sub type buttons: ", len(subTypeButtons))
+
+	for i, button := range subTypeButtons {
+		if i == 0 {
+			continue
+		}
+		button.Click(proto.InputMouseButtonLeft, 1)
+		<-ticker.C
+	}
+
+	ticker = time.NewTicker(20 * time.Second)
+	titleButtons := p.MustElements("div.main-stat__content div.tiered-block div.tiered-block__item div.tiered-block__item__top")
+	fmt.Println("itemButtons: ", len(titleButtons))
+
+	for _, button := range titleButtons {
+		title := button.MustElement("div.tiered-block__title p.tiered-block__player-team")
+		date := button.MustElement("div.tiered-block__title p.tiered-block__player-date.cap")
+		fmt.Println("title: ", title.MustText(), " date: ", date.MustText())
+		button.Click(proto.InputMouseButtonLeft, 1)
+		<-ticker.C
+		items := p.MustElements("div.tiered-block__under-level-block--opened div.shots-block div.shots-block__player")
+		fmt.Println("items: ", len(items))
+
+		for _, item := range items {
+			player := item.MustElement("p.shots-block__player-name").MustText()
+			values := item.MustElements("div.shots-block__player-values div.markets-slider__list.props div.markets-slider__item")
+			fmt.Println("item: ", player)
+
+			for _, value := range values {
+				amount := value.MustElement("p.markets-slider__amount").MustText()
+				stat := value.MustElement("p.markets-slider__stat").MustText()
+				fmt.Println("amount: ", amount, " stat: ", stat)
+			}
+		}
+	}
+
+	utils.Pause()
+}
+
 func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan error) {
 	defer b.Browser.Close()
 
@@ -171,8 +264,8 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 					HandleError(err, errChan)
 
 					game.Id = uuid.NewString()
-					game.Odds = pq.Float64Array{team1Odds, team2Odds}
-					game.Teams = pq.StringArray{teams[i].MustText(), teams[i+1].MustText()}
+					game.Odd = pq.Float64Array{team1Odds, team2Odds}
+					game.Team = pq.StringArray{teams[i].MustText(), teams[i+1].MustText()}
 
 					if i >= len(times) {
 						game.Date = times[(i/2)-1].MustText()

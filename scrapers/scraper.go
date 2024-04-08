@@ -22,7 +22,10 @@ type Game struct {
 	// you could earn per $100 bet
 	// if the team you bet on wins
 	// index 0 is the odds of 1, index 1 is the odds of team 2
-	Odds  pq.Float64Array `json:"odds" gorm:"type:numeric[]"`
-	Teams pq.StringArray  `json:"teams" gorm:"type:text[]"`
-	Date  string            `json:"date"`
+	League  string          `json:"league" gorm:"type:text"`
+	Title   string          `json:"title" gorm:"type:text"`
+	OddType string          `json:"oddType" gorm:"type:text"`
+	Team    pq.StringArray  `json:"team" gorm:"type:text"`
+	Odd     pq.Float64Array `json:"odd" gorm:"type:numeric"`
+	Date    string          `json:"date"`
 }
