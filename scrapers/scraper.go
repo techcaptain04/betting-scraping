@@ -13,6 +13,19 @@ type ScraperInterface interface {
 	CacheGames([]Game) error                    // place all games in mysql
 }
 
+type Props struct {
+	Name    string         `json:"name"`
+	Date    string         `json:"date"`
+	Teams   pq.StringArray `json:"team" gorm:"type:text[]"`
+}
+
+type PropPlayer struct {
+	GameName string          `json:"game"`
+	Name     string          `json:"name"`
+	Amounts  pq.Int64Array   `json:"amounts" gorm:"type:numeric[]"`
+	Odds     pq.Float64Array `json:"odds" gorm:"type:numeric[]"`
+}
+
 type Game struct {
 	Id string `json:"id"` // not scraped
 	// a ratio of odds for either team to win

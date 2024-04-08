@@ -13,7 +13,6 @@ import (
 	"github.com/go-rod/rod/lib/defaults"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
-	"github.com/go-rod/rod/lib/utils"
 	"github.com/go-rod/stealth"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -28,6 +27,7 @@ type BetOnline struct {
 type BetOnlineScraper struct {
 	Browser    *rod.Browser
 	Categories []cache.CategoryURL
+	DB         *gorm.DB
 	URL        string
 }
 
@@ -126,39 +126,44 @@ func (b *BetOnlineScraper) GetURLs() ([]cache.CategoryURL, error) {
 	return RemoveDuplicate(urls), err
 }
 
-func (b *BetOnlineScraper) GetProps() {
+func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan error) {
 	defaults.Show = true
-	page := rod.New().MustConnect().NoDefaultDevice().MustPage("https://sports.betonline.ag/sportsbook/props")
+	page, err := stealth.Page(b.Browser)
+	HandleError(err, errChan)
+
+	err = page.Navigate("https://sports.betonline.ag/sportsbook/props")
+	HandleError(err, errChan)
+
 	page.MustSetViewport(1920, 1080, 1, false)
 	time.Sleep(30 * time.Second)
 
 	f := page.MustElement("div.simplebar-wrapper div.simplebar-mask div.simplebar-content iframe").MustFrame()
 	if f == nil {
-		fmt.Println("iframe element not found or is nil")
+		errChan <- errors.New("iframe nil or nonexistent")
 		return
 	}
 
 	p := page.Browser().MustPageFromTargetID(proto.TargetTargetID(f.FrameID))
-	fmt.Println("iframe: ", f.FrameID)
 
 	mlbButtons := p.MustElements("div.ligues-slider__list.sports div div.ligues-slider__item.sportNames")
-	fmt.Println("buttons: ", len(mlbButtons))
+
 	for _, mlbButton := range mlbButtons {
 		if mlbButton.MustElement("div.ligues-slider__ligue-name.cap").MustText() == "MLB" {
 			err := mlbButton.Click(proto.InputMouseButtonLeft, 1)
+
 			time.Sleep(10 * time.Second)
-			if err != nil {
-				fmt.Println("error: ", err)
-				return
-			}
+
+			HandleError(err, errChan)
 			break
 		}
 	}
 
 	typeButton := p.MustElement("div.main-content__wrapper div.main-markets div.main-markets__list div:nth-child(10)")
 	if typeButton == nil {
+		errChan <- errors.New("typebutton is nil")
 		return
 	}
+
 	typeButton.Click(proto.InputMouseButtonLeft, 1)
 	time.Sleep(10 * time.Second)
 
@@ -178,7 +183,6 @@ func (b *BetOnlineScraper) GetProps() {
 
 	ticker := time.NewTicker(5 * time.Second)
 	subTypeButtons := p.MustElements("div.main-content__wrapper div.main-stats div.main-stats__item.main-stat div.main-stat__header")
-	fmt.Println("sub type buttons: ", len(subTypeButtons))
 
 	for i, button := range subTypeButtons {
 		if i == 0 {
@@ -190,31 +194,65 @@ func (b *BetOnlineScraper) GetProps() {
 
 	ticker = time.NewTicker(20 * time.Second)
 	titleButtons := p.MustElements("div.main-stat__content div.tiered-block div.tiered-block__item div.tiered-block__item__top")
-	fmt.Println("itemButtons: ", len(titleButtons))
 
-	for _, button := range titleButtons {
-		title := button.MustElement("div.tiered-block__title p.tiered-block__player-team")
-		date := button.MustElement("div.tiered-block__title p.tiered-block__player-date.cap")
-		fmt.Println("title: ", title.MustText(), " date: ", date.MustText())
-		button.Click(proto.InputMouseButtonLeft, 1)
+	for {
 		<-ticker.C
-		items := p.MustElements("div.tiered-block__under-level-block--opened div.shots-block div.shots-block__player")
-		fmt.Println("items: ", len(items))
+		for _, button := range titleButtons {
+			title := button.MustElement("div.tiered-block__title p.tiered-block__player-team")
+			date := button.MustElement("div.tiered-block__title p.tiered-block__player-date.cap")
 
-		for _, item := range items {
-			player := item.MustElement("p.shots-block__player-name").MustText()
-			values := item.MustElements("div.shots-block__player-values div.markets-slider__list.props div.markets-slider__item")
-			fmt.Println("item: ", player)
+			time.Sleep(3 * time.Second)
 
-			for _, value := range values {
-				amount := value.MustElement("p.markets-slider__amount").MustText()
-				stat := value.MustElement("p.markets-slider__stat").MustText()
-				fmt.Println("amount: ", amount, " stat: ", stat)
+			fmt.Println("title: ", title.MustText(), " date: ", date.MustText())
+
+			items := p.MustElements("div.tiered-block__under-level-block--opened div.shots-block div.shots-block__player")
+
+			for _, item := range items {
+				player := item.MustElement("p.shots-block__player-name").MustText()
+				values := item.MustElements("div.shots-block__player-values div.markets-slider__list.props div.markets-slider__item")
+
+				amounts := []int64{}
+				odds := []float64{}
+
+				for _, value := range values {
+					amount := value.MustElement("p.markets-slider__amount").MustText()
+					stat := value.MustElement("p.markets-slider__stat").MustText()
+
+					amountInt, err := strconv.ParseInt(amount, 10, 64)
+					HandleError(err, errChan)
+					oddsInt, err := strconv.ParseFloat(stat, 64)
+					HandleError(err, errChan)
+
+					amounts = append(amounts, amountInt)
+					odds = append(odds, oddsInt)
+				}
+
+				err = b.DB.Model(&scraper.PropPlayer{}).Create(&scraper.PropPlayer{
+					GameName: title.MustText(),
+					Name:     player,
+					Amounts:  amounts,
+					Odds:     odds,
+				}).Error
+				HandleError(err, errChan)
+			}
+
+			teams := strings.Split(title.MustText(), " @ ")
+
+			for i := range teams {
+				teams[i] = strings.Trim(teams[i], " ")
+			}
+
+			newProps <- scraper.Props{
+				Name:  title.MustText(),
+				Date:  date.MustText(),
+				Teams: teams,
 			}
 		}
+
+		err = page.Reload()
+		HandleError(err, errChan)
 	}
 
-	utils.Pause()
 }
 
 func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan error) {
