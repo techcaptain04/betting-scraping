@@ -2,6 +2,7 @@ package main
 
 import (
 	// "fmt"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -9,6 +10,7 @@ import (
 
 	// scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/ferretcode-freelancing/sportsbook-scraper/cache"
+	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/ferretcode-freelancing/sportsbook-scraper/scrapers/smart"
 	"github.com/joho/godotenv"
 )
@@ -29,12 +31,13 @@ func main() {
 	}
 
 	// newGame := make(chan scraper.Game)
+	props := make(chan scraper.Props)
 	errChan := make(chan error)
 
 	scrapers := smart.GetScrapers(cache.DB)
 
 	// urls, err := scrapers.BetOnline.Scraper.GetURLs()
-	scrapers.BetOnline.Scraper.GetProps()
+	scrapers.BetOnline.Scraper.GetProps(props, errChan)
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
@@ -50,6 +53,8 @@ func main() {
 			select {
 			case err := <-errChan:
 				log.Fatal(err)
+			case props := <-props:
+				fmt.Println(props)
 			}
 		}
 	}()
