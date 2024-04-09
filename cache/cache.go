@@ -7,6 +7,7 @@ import (
 
 	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/google/uuid"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -23,17 +24,28 @@ type CategoryURL struct {
 var ErrGameNotFound = errors.New("the game was not found in the database")
 
 func NewCache() (Cache, error) {
+	isLocal := os.Getenv("LOCAL")
 	dsn := os.Getenv("DSN")
+	if isLocal == "on" {
+		dsn = os.Getenv("LDSN")
+	}
 
 	if dsn == "" {
 		return Cache{}, errors.New("the dsn env variable was not found")
 	}
 
 	dsn = strings.ReplaceAll(dsn, "\n", "")
-
-	DB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true,
-	})
+	var DB *gorm.DB
+	var err error
+	if isLocal != "on" {
+		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			DisableForeignKeyConstraintWhenMigrating: true,
+		})
+	} else {
+		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+			DisableForeignKeyConstraintWhenMigrating: true,
+		})
+	}
 
 	if err != nil {
 		return Cache{}, err
