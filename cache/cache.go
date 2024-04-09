@@ -60,7 +60,9 @@ func NewCache() (Cache, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 
-	err = DB.AutoMigrate(&scraper.Game{}, CategoryURL{})
+	if isLocal != "on" {
+		err = DB.AutoMigrate(&scraper.Game{}, CategoryURL{})
+	}
 
 	if err != nil {
 		return Cache{}, err
