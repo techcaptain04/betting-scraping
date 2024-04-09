@@ -25,9 +25,17 @@ var ErrGameNotFound = errors.New("the game was not found in the database")
 
 func NewCache() (Cache, error) {
 	isLocal := os.Getenv("LOCAL")
+	dbChoice := os.Getenv("DB_CHOICE")
+
 	dsn := os.Getenv("DSN")
+
 	if isLocal == "on" {
-		dsn = os.Getenv("LDSN")
+		switch dbChoice {
+		case "postgres":
+			dsn = os.Getenv("LDSN_POSTGRES")
+		case "mysql":
+			dsn = os.Getenv("LDSN_MYSQL")
+		}
 	}
 
 	if dsn == "" {
@@ -42,9 +50,17 @@ func NewCache() (Cache, error) {
 			DisableForeignKeyConstraintWhenMigrating: true,
 		})
 	} else {
-		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
-			DisableForeignKeyConstraintWhenMigrating: true,
-		})
+		switch dbChoice {
+		case "postgres":
+			DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+				DisableForeignKeyConstraintWhenMigrating: true,
+			})
+		case "mysql":
+			DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+				DisableForeignKeyConstraintWhenMigrating: true,
+			})
+		}
+
 	}
 
 	if err != nil {
