@@ -128,7 +128,7 @@ func (b *BetOnlineScraper) GetURLs() ([]cache.CategoryURL, error) {
 
 func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan error) {
 	defaults.Show = true
-	page, err := stealth.Page(b.Browser)
+	page, err := stealth.Page(b.Browser.NoDefaultDevice())
 	HandleError(err, errChan)
 
 	err = page.Navigate("https://sports.betonline.ag/sportsbook/props")
