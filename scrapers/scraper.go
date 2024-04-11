@@ -14,15 +14,15 @@ type ScraperInterface interface {
 }
 
 type Props struct {
-	Name    string         `json:"name"`
-	Date    string         `json:"date"`
-	Teams   pq.StringArray `json:"team" gorm:"type:text[]"`
+	Name  string         `json:"name"`
+	Date  string         `json:"date"`
+	Teams pq.StringArray `json:"team" gorm:"type:text[]"`
 }
 
 type PropPlayer struct {
 	GameName string          `json:"game"`
 	Name     string          `json:"name"`
-	Amounts  pq.Int64Array   `json:"amounts" gorm:"type:numeric[]"`
+	Amounts  pq.Float64Array `json:"amounts" gorm:"type:numeric[]"`
 	Odds     pq.Float64Array `json:"odds" gorm:"type:numeric[]"`
 }
 

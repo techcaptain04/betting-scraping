@@ -211,14 +211,14 @@ func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan er
 				player := item.MustElement("p.shots-block__player-name").MustText()
 				values := item.MustElements("div.shots-block__player-values div.markets-slider__list.props div.markets-slider__item")
 
-				amounts := []int64{}
+				amounts := []float64{}
 				odds := []float64{}
 
 				for _, value := range values {
 					amount := value.MustElement("p.markets-slider__amount").MustText()
 					stat := value.MustElement("p.markets-slider__stat").MustText()
 
-					amountInt, err := strconv.ParseInt(amount, 10, 64)
+					amountInt, err := strconv.ParseFloat(amount, 64)
 					HandleError(err, errChan)
 					oddsInt, err := strconv.ParseFloat(stat, 64)
 					HandleError(err, errChan)
