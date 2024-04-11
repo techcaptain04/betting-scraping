@@ -356,8 +356,8 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 					}
 
 					game.Id = uuid.NewString()
-					game.Odd = pq.Float64Array{team1Odds, team2Odds}
-					game.Team = pq.StringArray{teams[i].MustText(), teams[i+1].MustText()}
+					game.Odds = pq.Float64Array{team1Odds, team2Odds}
+					game.Teams = pq.StringArray{teams[i].MustText(), teams[i+1].MustText()}
 
 					if i >= len(times) {
 						game.Date = times[(i/2)-1].MustText()
