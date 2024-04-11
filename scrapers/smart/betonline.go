@@ -126,20 +126,34 @@ func (b *BetOnlineScraper) GetURLs() ([]cache.CategoryURL, error) {
 	return RemoveDuplicate(urls), err
 }
 
-func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan error) {
+func (b *BetOnlineScraper) GetProps(
+	newProps chan scraper.Props,
+	errChan chan error,
+	fatalError chan scraper.FatalError,
+) {
+	fatalErr := scraper.FatalError{
+		Source: scraper.BETONLINE,
+	}
+
 	defaults.Show = true
 	page, err := stealth.Page(b.Browser.NoDefaultDevice())
-	HandleError(err, errChan)
+	if err != nil {
+		fatalError <- fatalErr.SetError(err)
+		return
+	}
 
 	err = page.Navigate("https://sports.betonline.ag/sportsbook/props")
-	HandleError(err, errChan)
+	if err != nil {
+		fatalError <- fatalErr.SetError(err)
+		return
+	}
 
 	page.MustSetViewport(1920, 1080, 1, false)
 	time.Sleep(30 * time.Second)
 
 	f := page.MustElement("div.simplebar-wrapper div.simplebar-mask div.simplebar-content iframe").MustFrame()
 	if f == nil {
-		errChan <- errors.New("iframe nil or nonexistent")
+		fatalError <- fatalErr.SetError(errors.New("iframe nil or nonexistent"))
 		return
 	}
 
@@ -153,14 +167,17 @@ func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan er
 
 			time.Sleep(10 * time.Second)
 
-			HandleError(err, errChan)
+			if err != nil {
+				fatalError <- fatalErr.SetError(err)
+				return
+			}
 			break
 		}
 	}
 
 	typeButton := p.MustElement("div.main-content__wrapper div.main-markets div.main-markets__list div:nth-child(10)")
 	if typeButton == nil {
-		errChan <- errors.New("typebutton is nil")
+		fatalError <- fatalErr.SetError(errors.New("typebutton is nil"))
 		return
 	}
 
@@ -211,20 +228,26 @@ func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan er
 				player := item.MustElement("p.shots-block__player-name").MustText()
 				values := item.MustElements("div.shots-block__player-values div.markets-slider__list.props div.markets-slider__item")
 
-				amounts := []int64{}
+				amounts := []float64{}
 				odds := []float64{}
 
 				for _, value := range values {
 					amount := value.MustElement("p.markets-slider__amount").MustText()
 					stat := value.MustElement("p.markets-slider__stat").MustText()
 
-					amountInt, err := strconv.ParseInt(amount, 10, 64)
-					HandleError(err, errChan)
-					oddsInt, err := strconv.ParseFloat(stat, 64)
-					HandleError(err, errChan)
+					amountFloat, err := strconv.ParseFloat(amount, 64)
+					if err != nil {
+						errChan <- err
+						continue
+					}
+					oddsFloat, err := strconv.ParseFloat(stat, 64)
+					if err != nil {
+						errChan <- err
+						continue
+					}
 
-					amounts = append(amounts, amountInt)
-					odds = append(odds, oddsInt)
+					amounts = append(amounts, amountFloat)
+					odds = append(odds, oddsFloat)
 				}
 
 				err = b.DB.Model(&scraper.PropPlayer{}).Create(&scraper.PropPlayer{
@@ -233,7 +256,10 @@ func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan er
 					Amounts:  amounts,
 					Odds:     odds,
 				}).Error
-				HandleError(err, errChan)
+				if err != nil {
+					errChan <- err
+					continue
+				}
 			}
 
 			teams := strings.Split(title.MustText(), " @ ")
@@ -243,14 +269,18 @@ func (b *BetOnlineScraper) GetProps(newProps chan scraper.Props, errChan chan er
 			}
 
 			newProps <- scraper.Props{
-				Name:  title.MustText(),
-				Date:  date.MustText(),
-				Teams: teams,
+				Name:   title.MustText(),
+				Date:   date.MustText(),
+				Teams:  teams,
+				Source: scraper.BETONLINE,
 			}
 		}
 
 		err = page.Reload()
-		HandleError(err, errChan)
+		if err != nil {
+			fatalError <- fatalErr.SetError(err)
+			return
+		}
 	}
 
 }
@@ -259,10 +289,16 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 	defer b.Browser.Close()
 
 	page, err := stealth.Page(b.Browser)
-	HandleError(err, errChan)
+	if err != nil {
+		errChan <- err
+		return
+	}
 
 	err = page.Navigate("https://sports.betonline.ag/sportsbook")
-	HandleError(err, errChan)
+	if err != nil {
+		errChan <- err
+		return
+	}
 
 	//TODO: change to 30 in prod
 	ticker := time.NewTicker(120 * time.Second)
@@ -276,16 +312,28 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 		<-ticker.C
 		for _, category := range b.Categories {
 			err = page.Navigate(category.BaseURL + category.CategoryURL)
-			HandleError(err, errChan)
+			if err != nil {
+				errChan <- err
+				continue
+			}
 
 			teams, err := page.Elements(gamesSelector + " > " + teamsSelector)
-			HandleError(err, errChan)
+			if err != nil {
+				errChan <- err
+				continue
+			}
 
 			times, err := page.Elements(gamesSelector + " > " + timeSelector)
-			HandleError(err, errChan)
+			if err != nil {
+				errChan <- err
+				continue
+			}
 
 			moneyLine, err := page.Elements(gamesSelector + " > " + moneyLineSelector)
-			HandleError(err, errChan)
+			if err != nil {
+				errChan <- err
+				continue
+			}
 
 			fmt.Printf("num teams: %d\n", len(teams))
 			fmt.Printf("num times: %d\n", len(times))
@@ -296,10 +344,16 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 
 				if i%2 == 0 && i != len(teams)-1 {
 					team1Odds, err := strconv.ParseFloat(strings.Replace(moneyLine[i].MustText(), "+", "", -1), 64)
-					HandleError(err, errChan)
+					if err != nil {
+						errChan <- err
+						continue
+					}
 
 					team2Odds, err := strconv.ParseFloat(strings.Replace(moneyLine[i+1].MustText(), "+", "", -1), 64)
-					HandleError(err, errChan)
+					if err != nil {
+						errChan <- err
+						continue
+					}
 
 					game.Id = uuid.NewString()
 					game.Odds = pq.Float64Array{team1Odds, team2Odds}
@@ -317,7 +371,10 @@ func (b *BetOnlineScraper) GetGames(newGame chan scraper.Game, errChan chan erro
 		}
 
 		err = page.Reload()
-		HandleError(err, errChan)
+		if err != nil {
+			errChan <- err
+			continue
+		}
 	}
 }
 
