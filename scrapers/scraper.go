@@ -38,7 +38,7 @@ type Game struct {
 	League  string          `json:"league" gorm:"type:text"`
 	Title   string          `json:"title" gorm:"type:text"`
 	OddType string          `json:"oddType" gorm:"type:text"`
-	Team    pq.StringArray  `json:"team" gorm:"type:text"`
-	Odd     pq.Float64Array `json:"odd" gorm:"type:numeric"`
+	Teams   pq.StringArray  `json:"team" gorm:"type:text[]"`
+	Odds    pq.Float64Array `json:"odd" gorm:"type:numeric[]"`
 	Date    string          `json:"date"`
 }

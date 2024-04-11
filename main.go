@@ -36,8 +36,8 @@ func main() {
 
 	scrapers := smart.GetScrapers(cache.DB)
 
-	// urls, err := scrapers.BetOnline.Scraper.GetURLs()
 	scrapers.BetOnline.Scraper.GetProps(props, errChan)
+	// urls, err := scrapers.BetOnline.Scraper.GetURLs()
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }

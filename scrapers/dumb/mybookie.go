@@ -125,10 +125,10 @@ func (b *MyBookie) GetData(newGame chan scraper.Game, errChan chan error) {
 					}
 
 					game := scraper.Game{
-						Id:   uuid.NewString(),
-						Team: pq.StringArray{homeTeam, visitorTeam},
-						Odd:  pq.Float64Array{team1Odds, team2Odds},
-						Date: strconv.FormatInt(startDate.Unix(), 10),
+						Id:    uuid.NewString(),
+						Teams: pq.StringArray{homeTeam, visitorTeam},
+						Odds:  pq.Float64Array{team1Odds, team2Odds},
+						Date:  strconv.FormatInt(startDate.Unix(), 10),
 					}
 
 					newGame <- game
