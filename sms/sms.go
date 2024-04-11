@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/twilio/twilio-go"
 	api "github.com/twilio/twilio-go/rest/api/v2010"
 	"gorm.io/gorm"
@@ -39,17 +40,32 @@ func NewSMS(db *gorm.DB) (SMS, error) {
 	return sms, nil
 }
 
-func (s *SMS) SendSMS(siteURL string, teams []string, odds []float64) error {
+func (s *SMS) SendSMS(source int, game, player string, odds []string) error {
 	params := &api.CreateMessageParams{}
+
+	site := ""
+
+	switch source {
+	case scraper.BETRIVERS:
+		site = "BetRivers"
+	case scraper.BETONLINE:
+		site = "BetOnline"
+	case scraper.FANDUEL:
+		site = "Fanduel"
+	case scraper.CAESARS:
+		site = "Caesars"
+	case scraper.ESPN:
+		site = "ESPN"
+	}
 
 	params.SetBody(
 		fmt.Sprintf(
-			"New discrepancy detected on %s. The odds are %f - %f for teams %s and %s.",
-			siteURL,
+			"New discrepancy detected on %s for game %s. The odds are %s - %s for player %s",
+			site,
+			game,
 			odds[0],
 			odds[1],
-			teams[0],
-			teams[1],
+			player,
 		),
 	)
 	params.SetFrom(s.PhoneNumber)

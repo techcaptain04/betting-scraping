@@ -3,6 +3,7 @@ package smart
 import (
 	"log"
 
+	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +26,14 @@ func GetScrapers(db *gorm.DB) Scrapers {
 		BetOnline: betonline,
 		BetRivers: betrivers,
 	}
+}
+
+func (s *Scrapers) StartScrapers(
+	newProps chan scraper.Props,
+	errChan chan error,
+	fatalError chan scraper.FatalError,
+) {
+	go s.BetOnline.Scraper.GetProps(newProps, errChan, fatalError)
 }
 
 func HandleError(err error, errChan chan error) {

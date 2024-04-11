@@ -2,7 +2,7 @@ package main
 
 import (
 	// "fmt"
-	"fmt"
+
 	"log"
 	"os"
 	"os/signal"
@@ -10,8 +10,10 @@ import (
 
 	// scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/ferretcode-freelancing/sportsbook-scraper/cache"
+	"github.com/ferretcode-freelancing/sportsbook-scraper/query"
 	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
 	"github.com/ferretcode-freelancing/sportsbook-scraper/scrapers/smart"
+	"github.com/ferretcode-freelancing/sportsbook-scraper/sms"
 	"github.com/joho/godotenv"
 )
 
@@ -30,34 +32,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// newGame := make(chan scraper.Game)
 	props := make(chan scraper.Props)
 	errChan := make(chan error)
+	fatalErr := make(chan scraper.FatalError)
 
 	scrapers := smart.GetScrapers(cache.DB)
 
-	scrapers.BetOnline.Scraper.GetProps(props, errChan)
-	// urls, err := scrapers.BetOnline.Scraper.GetURLs()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	queryService := query.QueryService{}
 
-	// err = cache.StoreURLs(urls)
+	smsService, err := sms.NewSMS(cache.DB)
 
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	go func() {
-		for {
-			select {
-			case err := <-errChan:
-				log.Fatal(err)
-			case props := <-props:
-				fmt.Println(props)
-			}
-		}
-	}()
+	go queryService.ProcessProps(
+		scrapers,
+		props,
+		errChan,
+		fatalErr,
+		smsService,
+	)
+
+	scrapers.StartScrapers(props, errChan, fatalErr)
 
 	done := make(chan os.Signal, 1)
 

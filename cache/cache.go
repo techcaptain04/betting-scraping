@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	scraper "github.com/ferretcode-freelancing/sportsbook-scraper/scrapers"
-	"github.com/google/uuid"
+	"github.com/ferretcode-freelancing/sportsbook-scraper/sms"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -76,9 +76,7 @@ func NewCache() (Cache, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 
-	if isLocal != "on" {
-		err = DB.AutoMigrate(&scraper.Game{}, CategoryURL{})
-	}
+	err = DB.AutoMigrate(&scraper.Game{}, &CategoryURL{}, &sms.User{})
 
 	if err != nil {
 		return Cache{}, err
@@ -99,30 +97,12 @@ func (c *Cache) StoreURLs(categories []CategoryURL) error {
 	return nil
 }
 
-func (c *Cache) WriteCache(game scraper.Game) error {
-	game.Id = uuid.NewString()
-
-	err := c.DB.Create(game).Error
+func (c *Cache) WriteCache(props scraper.Props) error {
+	err := c.DB.Create(props).Error
 
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (c *Cache) GetCache(date string, teams []string) (scraper.Game, error) {
-	var game scraper.Game
-
-	err := c.DB.Where("teams = ? AND date = ?", teams, date).Error
-
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return scraper.Game{}, ErrGameNotFound
-		}
-
-		return scraper.Game{}, err
-	}
-
-	return game, nil
 }

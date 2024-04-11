@@ -14,16 +14,49 @@ type ScraperInterface interface {
 }
 
 type Props struct {
-	Name  string         `json:"name"`
-	Date  string         `json:"date"`
-	Teams pq.StringArray `json:"team" gorm:"type:text[]"`
+	Name   string         `json:"name"`
+	Date   string         `json:"date"`
+	Teams  pq.StringArray `json:"teams" gorm:"type:text[]"`
+	Source int            `json:"source"`
 }
 
 type PropPlayer struct {
-	GameName string          `json:"game"`
+	GameName string          `json:"game_name"`
 	Name     string          `json:"name"`
 	Amounts  pq.Float64Array `json:"amounts" gorm:"type:numeric[]"`
 	Odds     pq.Float64Array `json:"odds" gorm:"type:numeric[]"`
+}
+
+type LegalProps struct {
+	Name  string         `json:"name"`
+	Date  string         `json:"date"`
+	Teams pq.StringArray `json:"teams" gorm:"type:text[]"`
+}
+
+type LegalPlayer struct {
+	GameName   string  `json:"game_name"`
+	Name       string  `json:"name"`
+	Determiner float64 `json:"determiner"`
+	Over       float64 `json:"over"`
+	Under      float64 `json:"under"`
+}
+
+const (
+	BETONLINE = iota
+	BETRIVERS
+	FANDUEL
+	ESPN
+	CAESARS
+)
+
+type FatalError struct {
+	Source int
+	Error  error
+}
+
+func (f *FatalError) SetError(err error) FatalError {
+	f.Error = err
+	return *f
 }
 
 type Game struct {
