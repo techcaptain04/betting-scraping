@@ -60,7 +60,14 @@ func NewBetRivers(db *gorm.DB) (BetRivers, error) {
 	}, nil
 }
 
-func (b *BetRiversScraper) GetProps(newProps chan scraper.Props, errChan chan error) {
+func (b *BetRiversScraper) GetProps(
+	newProps chan scraper.Props,
+	errChan chan error,
+	fatalError chan scraper.FatalError,
+) {
+	fatalErr := scraper.FatalError{
+		Source: scraper.BETRIVERS,
+	}
 	defer b.Browser.Close()
 
 	page, err := stealth.Page(b.Browser)
@@ -72,7 +79,7 @@ func (b *BetRiversScraper) GetProps(newProps chan scraper.Props, errChan chan er
 	time.Sleep(30 * time.Second)
 	sportsButtons, err := page.Elements("#rsi-product-navigation-widget-bar-container > nav > div button")
 	HandleError(err, errChan)
-	fmt.Println("buttons: ", len(sportsButtons))
+	// fmt.Println("buttons: ", len(sportsButtons))
 	if len(sportsButtons) == 0 {
 		fmt.Println("there is no button")
 		return
@@ -80,7 +87,7 @@ func (b *BetRiversScraper) GetProps(newProps chan scraper.Props, errChan chan er
 	for _, button := range sportsButtons {
 		sportsName := button.MustAttribute("aria-label")
 		if *sportsName == "Navigate to MLB" {
-			fmt.Println("Navigate to MLB")
+			// fmt.Println("Navigate to MLB")
 			err := button.Click(proto.InputMouseButtonLeft, 1)
 			HandleError(err, errChan)
 			time.Sleep(10 * time.Second)
@@ -88,7 +95,7 @@ func (b *BetRiversScraper) GetProps(newProps chan scraper.Props, errChan chan er
 		}
 	}
 	propButtons := page.MustElements("div#sportsbook-page div#rsi-sports-feed > div > div > nav:nth-child(3) > div > div > button")
-	fmt.Println("propButtons", len(propButtons))
+	// fmt.Println("propButtons", len(propButtons))
 	if len(propButtons) == 0 {
 		fmt.Println("no props")
 		return
@@ -96,7 +103,7 @@ func (b *BetRiversScraper) GetProps(newProps chan scraper.Props, errChan chan er
 	for _, button := range propButtons {
 		prop := button.MustElement("span").MustText()
 		if prop == "Player Props" {
-			fmt.Println("player props")
+			// fmt.Println("player props")
 			err := button.Click(proto.InputMouseButtonLeft, 1)
 			HandleError(err, errChan)
 			time.Sleep(10 * time.Second)
@@ -106,107 +113,114 @@ func (b *BetRiversScraper) GetProps(newProps chan scraper.Props, errChan chan er
 
 	typeButtons, err := page.Elements("div#sportsbook-page div#rsi-sports-feed > div > div > div.sc-crwTFP.hutnOD div.sc-ivTmOn.bTibLZ div button")
 	HandleError(err, errChan)
-	fmt.Println("typeButtons: ", len(typeButtons))
+	// fmt.Println("typeButtons: ", len(typeButtons))
 	if len(typeButtons) == 0 {
 		fmt.Println("no types")
 		return
 	}
 	for _, button := range typeButtons {
 		if button.MustText() == "Total Bases" {
-			fmt.Println("Total Bases")
+			// fmt.Println("Total Bases")
 			err := button.Click(proto.InputMouseButtonLeft, 1)
 			HandleError(err, errChan)
 			time.Sleep(10 * time.Second)
 			break
 		}
 	}
-
-	items := page.MustElements("div#sportsbook-page div#rsi-sports-feed article.sc-ilxaJO.ldRamq")
-	fmt.Println("items: ", len(items))
-	var tempTeam string
-	var date string
-	ticker := time.NewTicker(3 * time.Second)
-	for _, item := range items {
-		moreButton := item.MustElement("div.sc-eBOtmg.ezwdhJ button.sc-dAIixb.cRHXkq")
-		moreButton.Click(proto.InputMouseButtonLeft, 1)
+	ticker := time.NewTicker(5 * time.Second)
+	for {
 		<-ticker.C
-		temp, err := item.Element("div.sc-gNLcUQ.egUfuw")
-		HandleError(err, errChan)
-		titleData := temp.MustAttribute("aria-label")
-		if titleData != nil {
-			fmt.Println("data: ", *titleData)
-			str := *titleData
-			results := strings.Split(str, ",")
-			for i, result := range results {
-				if i == 0 {
-					tempTeam = result
-					fmt.Println("Title: ", result)
-				} else if i == 1 {
-					date = result
-					fmt.Println("Date: ", result)
-				}
-			}
-		}
-		data := temp.MustElement("div.sc-eBOtmg.ezwdhJ div.sc-ftNBoD.jUEglE")
-		playersDOM := data.MustElements("div.sc-kRjaKC div.sc-jmjsKF div.sc-dRqsoR.sc-fWuLJ.jRUQXV.dzvaVD")
-		oddsDOM := data.MustElements("div.sc-iaSSRK div.sc-iaSSRK")
-		players := []string{}
-		amounts := []pq.Float64Array{}
-		stats := []pq.Float64Array{}
+		items := page.MustElements("div#sportsbook-page div#rsi-sports-feed article.sc-ilxaJO.ldRamq")
+		// fmt.Println("items: ", len(items))
+		var team string
+		var date string
+		for _, item := range items {
+			moreButton := item.MustElement("div.sc-eBOtmg.ezwdhJ button.sc-dAIixb.cRHXkq")
+			moreButton.Click(proto.InputMouseButtonLeft, 1)
+			<-ticker.C
+			players := []string{}
+			overs := []float64{}
+			unders := []float64{}
+			determiners := []float64{}
 
-		for _, item := range playersDOM {
-			player := item.MustText()
-			players = append(players, player)
-			fmt.Println("player: ", player)
-		}
-		for _, item := range oddsDOM {
-			temps := item.MustElements("div.sc-fqEDVf button.sc-iKKmqK")
-			var tempStats pq.Float64Array
-			var tempAmount pq.Float64Array
-			for i, temp := range temps {
-				amount := temp.MustElement("div.sc-dloDHE").MustText()
-				stat := temp.MustElement("div.sc-hBYLEG ul.sc-imZoBe li").MustText()
-				if i%2 == 0 {
-					tempAmount = pq.Float64Array{}
-					tempStats = pq.Float64Array{}
-					firstAmount, err := strconv.ParseFloat(strings.Replace(amount, "O ", "+", -1), 64)
-					HandleError(err, errChan)
-					firstStat, err := strconv.ParseFloat(stat, 64)
-					HandleError(err, errChan)
-					tempAmount = append(tempAmount, firstAmount)
-					tempStats = append(tempStats, firstStat)
-				} else {
-					secondAmount, err := strconv.ParseFloat(strings.Replace(amount, "O ", "+", -1), 64)
-					HandleError(err, errChan)
-					secondStat, err := strconv.ParseFloat(stat, 64)
-					HandleError(err, errChan)
-					tempAmount = append(tempAmount, secondAmount)
-					tempStats = append(tempStats, secondStat)
-					amounts = append(amounts, tempAmount)
-					stats = append(stats, tempStats)
-				}
-				fmt.Println("stat: ", stat)
-				fmt.Println("amount: ", amount)
-			}
-		}
-		for i := range players {
-			err = b.DB.Model(&scraper.PropPlayer{}).Create(&scraper.PropPlayer{
-				GameName: "MLB",
-				Name:     players[i],
-				Amounts:  amounts[i],
-				Odds:     stats[i],
-			}).Error
+			temp, err := item.Element("div.sc-gNLcUQ.egUfuw")
 			HandleError(err, errChan)
-		}
-		teams := strings.Split(tempTeam, " @ ")
-		for i := range teams {
-			teams[i] = strings.Trim(teams[i], " ")
+			titleData := temp.MustAttribute("aria-label")
+			if titleData != nil {
+				// fmt.Println("data: ", *titleData)
+				str := *titleData
+				results := strings.Split(str, ",")
+				for i, result := range results {
+					if i == 0 {
+						team = result
+						// fmt.Println("Title: ", result)
+					} else if i == 1 {
+						date = result
+						// fmt.Println("Date: ", result)
+					}
+				}
+			}
+
+			data := temp.MustElement("div.sc-eBOtmg.ezwdhJ div.sc-ftNBoD.jUEglE")
+			playersDOM := data.MustElements("div.sc-kRjaKC div.sc-jmjsKF div.sc-dRqsoR.sc-fWuLJ.jRUQXV.dzvaVD")
+			oddsDOM := data.MustElements("div.sc-iaSSRK div.sc-iaSSRK")
+
+			for _, item := range playersDOM {
+				player := item.MustText()
+				players = append(players, player)
+				// fmt.Println("player: ", player)
+			}
+
+			for _, item := range oddsDOM {
+				temps := item.MustElements("div.sc-fqEDVf button.sc-iKKmqK")
+				for i, temp := range temps {
+					amount := temp.MustElement("div.sc-dloDHE").MustText()
+					stat := temp.MustElement("div.sc-hBYLEG ul.sc-imZoBe li").MustText()
+					if i%2 == 0 {
+						determiner, err := strconv.ParseFloat(strings.ReplaceAll(amount, "O\u00a0", ""), 64)
+						determiners = append(determiners, determiner)
+						HandleError(err, errChan)
+						over, err := strconv.ParseFloat(stat, 64)
+						HandleError(err, errChan)
+						overs = append(overs, over)
+					} else {
+						HandleError(err, errChan)
+						under, err := strconv.ParseFloat(stat, 64)
+						unders = append(unders, under)
+						HandleError(err, errChan)
+					}
+					// fmt.Println("stat: ", stat)
+					// fmt.Println("amount: ", amount)
+				}
+			}
+			title := *titleData
+			for i := range players {
+				err = b.DB.Model(&scraper.LegalPlayer{}).Create(&scraper.LegalPlayer{
+					GameName:   title,
+					Name:       players[i],
+					Determiner: determiners[i],
+					Over:       overs[i],
+					Under:      unders[i],
+				}).Error
+				HandleError(err, errChan)
+			}
+
+			teams := strings.Split(team, " @ ")
+			for i := range teams {
+				teams[i] = strings.Trim(teams[i], " ")
+			}
+
+			newProps <- scraper.Props{
+				Name:  title,
+				Date:  date,
+				Teams: teams,
+			}
 		}
 
-		newProps <- scraper.Props{
-			Name:  "MLB",
-			Date:  date,
-			Teams: teams,
+		err = page.Reload()
+		if err != nil {
+			fatalError <- fatalErr.SetError(err)
+			return
 		}
 	}
 }
