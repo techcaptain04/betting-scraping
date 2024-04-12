@@ -33,7 +33,7 @@ func (s *Scrapers) StartScrapers(
 	errChan chan error,
 	fatalError chan scraper.FatalError,
 ) {
-	go s.BetOnline.Scraper.GetProps(newProps, errChan, fatalError)
+	go s.BetRivers.Scraper.GetProps(newProps, errChan, fatalError)
 }
 
 func HandleError(err error, errChan chan error) {
